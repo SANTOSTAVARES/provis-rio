@@ -1,0 +1,477 @@
+from datetime import datetime
+from typing import Any
+import numpy
+import pandas as pd
+
+
+columns_order = {'Plantio de Fêmea': [
+    "Campo",
+    "Híbrido",
+    "Grower",
+    "Production Core",
+    "Área declarada (Ha)",
+    "Datas Plantio",
+    "Plantio Finalizado?",
+    "Motivo Não-Plantio",
+    "Comentário",
+    "Área plantada por dia (Ha)"
+],
+    'Colheita': [
+    'Campo',
+    'Híbrido',
+    'Grower',
+    'Production Core',
+    'Área declarada (Ha)',
+    'Data início colheita',
+    'Data fim colheita',
+    'Colheita 1',
+    'Área colhida 1',
+    'Colheita 2',
+    'Área colhida 2',
+    'Transporte 1',
+    'Área Transporte 1',
+    'Transporte 2',
+    'Área Transporte 2'
+],
+    'Despendoamento': [
+    "Campo",
+    "Híbrido",
+    "Grower",
+    "Production Core",
+    "Área declarada (Ha)",
+    "Data início despendoamento",
+    "Data fim despendoamento",
+    "Hectares Mecânicos",
+    "PT Mecânico",
+    "Número de folhas acima da espiga (Pós-Máquina)",
+    "Hectares Manuais",
+    "PT Manual",
+    "Número de folhas acima da espiga - Final (Yield Tracker)",
+    "Data final de repasse (fechamento)",
+    "Motivo para despendoamento manual",
+    "Comentários",
+    "PT encerramento do campo (ROI)",
+    "Situação do Campo",
+    "Campo fechado? (Não)",
+    "Campo fechado? (Sim)"
+]
+}
+
+
+def distinguish_data_according_to_cropwise_forms(data_from_mio: tuple) -> dict[str, list[dict[str, Any]]]:
+    plantio_de_femea = {}
+    colheita = {}
+    despendoamento = {}
+
+    for i in data_from_mio:
+
+        # Plantio de Fêmea
+        if i[22] == 'Plantio de Fêmea':  # Phenomenon name column
+            key = f'{i[4]}_{i[25]}'
+
+            if key not in plantio_de_femea:
+                plantio_de_femea[key] = {
+                    'Campo': i[4],
+                    'Híbrido': i[10],
+                    'Grower': i[11],
+                    'Production Core': i[5],
+                    'Área declarada (Ha)': i[13],
+                    'Motivo Não-Plantio': None,
+                    'Comentário': None,
+                    'Ano do plantio': 2025,
+                }
+
+            if i[23] == 'Quantidade de Hectares Plantados por Dia':
+                plantio_de_femea[key]['Área plantada por dia (Ha)'] = i[24]
+            elif i[23] == 'Último dia de plantio - Sim':
+                plantio_de_femea[key]['Plantio Finalizado?'] = 'Yes'
+            elif i[23] == 'Último dia de plantio - Não':
+                plantio_de_femea[key]['Plantio Finalizado?'] = 'No'
+            elif i[23] == 'Mês do Plantio':
+                plantio_de_femea[key]['Mês do Plantio'] = int(i[24])
+            elif i[23] == 'Dia do Plantio':
+                plantio_de_femea[key]['Dia do Plantio'] = int(i[24])
+            elif i[23] == 'Mês do Plantio de Fêmea':
+                plantio_de_femea[key]['Mês do Plantio'] = int(i[24])
+            elif i[23] == 'Dia do Plantio de Fêmea':
+                plantio_de_femea[key]['Dia do Plantio'] = int(i[24])
+
+        # Colheita
+        if i[22] == 'Colheita':  # Phenomenon name column
+            key = f'{i[4]}_{i[25]}'
+
+            if key not in colheita:
+                colheita[key] = {
+                    'Campo': i[4],
+                    'Híbrido': i[10],
+                    'Grower': i[11],
+                    'Production Core': i[5],
+                    'Área declarada (Ha)': i[13],
+                    'Data fim colheita': None,
+                    'Área Transporte 1': None,
+                    'Área Transporte 2': None
+                }
+
+            # Data início colheita
+            if i[23] == 'Início: Dia da Colheita':
+                colheita[key]['Início: Dia da Colheita'] = int(i[24])
+            elif i[23] == 'Início: Mês da Colheita':
+                colheita[key]['Início: Mês da Colheita'] = int(i[24])
+            # Colheita 1
+            elif i[23] == 'Provedor de colheita 01 - Transmilenio':
+                colheita[key]['Colheita 1'] = 'Transmilenio'
+            elif i[23] == 'Provedor de colheita 01 - Grower':
+                colheita[key]['Colheita 1'] = 'Grower'
+            elif i[23] == 'Provedor de colheita 01 - Transgrãos':
+                colheita[key]['Colheita 1'] = 'Transgrãos'
+            #   Área colhida 1
+            elif i[23] == 'Hectares - Provedor de colheita 01':
+                colheita[key]['Área colhida 1'] = i[24]
+            # Colheita 2
+            elif i[23] == 'Provedor de colheita 02 - Transmilenio':
+                colheita[key]['Colheita 2'] = 'Transmilenio'
+            elif i[23] == 'Provedor de colheita 02 - Grower':
+                colheita[key]['Colheita 2'] = 'Grower'
+            elif i[23] == 'Provedor de colheita 02 - Transgrãos':
+                colheita[key]['Colheita 2'] = 'Transgrãos'
+            # Área colhida 2
+            elif i[23] == 'Hectares - Provedor de colheita 02':
+                colheita[key]['Área colhida 2'] = i[24]
+            # Transporte 1
+            elif i[23] == 'Provedor de transporte 01 - Transgrãos':
+                colheita[key]['Transporte 1'] = 'Transgrãos'
+            elif i[23] == 'Provedor de transporte 01 - Transpanorama':
+                colheita[key]['Transporte 1'] = 'Transpanorama'
+            # Transporte 2
+            elif i[23] == 'Provedor de transporte 02 - Transgrãos':
+                colheita[key]['Transporte 2'] = 'Transgrãos'
+            elif i[23] == 'Provedor de transporte 02 - Transpanorama':
+                colheita[key]['Transporte 2'] = 'Transpanorama'
+
+        # Despendoamento
+        phenomenon_name_despendoamento = ["Início do Despendoamento",
+                                          "Final do Despendoamento",
+                                          "Fechamento do Campo",
+                                          "Informações da Inspeção de Florescimento"]
+
+        if i[22] in phenomenon_name_despendoamento:  # Phenomenon name column
+            key = i[4]
+
+            if key not in despendoamento:
+                despendoamento[key] = {
+                    'Campo': i[4],
+                    'Híbrido': i[10],
+                    'Grower': i[11],
+                    'Production Core': i[5],
+                    'Área declarada (Ha)': i[13],
+                    'Comentários': None,
+                    'PT encerramento do campo (ROI)': None
+                }
+                # Data início despendoamento
+                if i[23] == 'Início: Dia':
+                    despendoamento[key]['Início: Dia'] = int(i[24])
+                elif i[23] == 'Início: Mês':
+                    despendoamento[key]['Início: Mês'] = int(i[24])
+                # Data fim despendoamento
+                elif i[23] == 'Final: Dia':
+                    despendoamento[key]['Final: Dia'] = int(i[24])
+                elif i[23] == 'Final: Mês':
+                    despendoamento[key]['Final: Mês'] = int(i[24])
+                # Hectares Mecânicos
+                elif i[23] == 'Hectares de despendoamento mecânico':
+                    despendoamento[key]['Hectares Mecânicos'] = i[24]
+                # PT Mecânico
+                elif i[23] == 'Pendões tirados mecânico':
+                    despendoamento[key]['PT Mecânico'] = i[24]
+                # Número de folhas acima da espiga (Pós-Máquina)
+                elif i[23] == 'Número de folhas acima da espiga (pós máquina)':
+                    despendoamento[key]['Número de folhas acima da espiga (Pós-Máquina)'] = i[24]
+                # Hectares Manuais
+                elif i[23] == 'Hectares de despendoamento manual':
+                    despendoamento[key]['Hectares Manuais'] = i[24]
+                # PT Manual
+                elif i[23] == 'Pendões tirados manual':
+                    despendoamento[key]['PT Manual'] = i[24]
+                # Número de folhas acima da espiga - Final (Yield Tracker)
+                elif i[23] == 'Número de Folhas Acima da Espiga (pós-equipe)':
+                    despendoamento[key][
+                        'Número de folhas acima da espiga - Final (Yield Tracker)'] = i[24]
+                # Data final de repasse (fechamento)
+                elif i[23] == 'Dia do fim do repasse':
+                    despendoamento[key]['Dia do fim do repasse'] = int(i[24])
+                elif i[23] == 'Mês do fim do repasse':
+                    despendoamento[key]['Mês do fim do repasse'] = int(i[24])
+                # Motivo para despendoamento manual
+                elif 'Motivo para o despendoamento manual - ' in i[23]:
+                    length = len('Motivo para o despendoamento manual - ')
+                    despendoamento[key]['Motivo para despendoamento manual'] = i[23][length:]
+                # Situação do Campo
+                    # Priority level: Vermelho > Laranja > Amarelo > Verde
+                elif i[23] in ['Classificação da Inspeção - Verde', 'Classificação da Inspeção - Amarelo', 'Classificação da Inspeção - Laranja', 'Classificação da Inspeção - Vermelho']:
+                    if 'Situação do Campo' not in despendoamento[key]:
+                        length = len('Classificação da Inspeção - ')
+                        despendoamento[key]['Situação do Campo'] = i[23][length:]
+                    else:
+                        current_status = despendoamento[key]['Situação do Campo']
+                        if i[23] == 'Classificação da Inspeção - Vermelho':
+                            despendoamento[key]['Situação do Campo'] = 'Vermelho'
+                        elif i[23] == 'Classificação da Inspeção - Laranja' and current_status == 'Verde' or current_status == 'Amarelo':
+                            despendoamento[key]['Situação do Campo'] = 'Laranja'
+                        elif i[23] == 'Classificação da Inspeção - Amarelo' and current_status == 'Verde':
+                            despendoamento[key]['Situação do Campo'] = 'Amarelo'
+                # Campo fechado? (Não)
+                elif i[23] == 'Última Inspeção - Não':
+                    if 'Campo fechado? (Não)' not in despendoamento[key]:
+                        despendoamento[key]['Campo fechado? (Não)'] = 1
+                    else:
+                        despendoamento[key]['Campo fechado? (Não)'] = despendoamento[key]['Campo fechado? (Não)'] + 1
+                # Campo fechado? (Sim)
+                elif i[23] == 'Última Inspeção - Sim':
+                    if 'Campo fechado? (Não)' not in despendoamento[key]:
+                        despendoamento[key]['Última Inspeção - Sim'] = 1
+                    else:
+                        despendoamento[key]['Última Inspeção - Sim'] = despendoamento[key]['Última Inspeção - Sim'] + 1
+
+    data_to_return = {'Plantio de Fêmea': list(plantio_de_femea.values()),
+                      'Colheita': list(colheita.values()),
+                      'Despendoamento': list(colheita.values())
+                      }
+    # return list(plantio_de_femea.values())
+    breakpoint()
+    return data_to_return
+
+
+def create_spreadsheet_according_to_cropwise_form(data: dict[str, list[dict[str, Any]]],
+                                                  path_to_save_file: str = None):
+    # Plantio de Fêmea
+    df_plantio_de_femea = pd.DataFrame(data=data['Plantio de Fêmea'])
+
+    df_plantio_de_femea['Datas Plantio'] = ''
+
+    for line in range(len(df_plantio_de_femea)):
+
+        mes_do_plantio = df_plantio_de_femea.loc[line, 'Mês do Plantio']
+        dia_do_plantio = df_plantio_de_femea.loc[line, 'Dia do Plantio']
+
+        if isinstance(mes_do_plantio, numpy.int64) and isinstance(dia_do_plantio, numpy.int64):
+            df_plantio_de_femea.loc[line, 'Datas Plantio'] = datetime(
+                2025, mes_do_plantio, dia_do_plantio).date()
+        else:
+            df_plantio_de_femea.loc[line, 'Datas Plantio'] = None
+
+    columns_indices = []
+    for col in columns_order['Plantio de Fêmea']:
+        columns_indices.append(df_plantio_de_femea.columns.get_loc(col))
+
+    df_plantio_de_femea = df_plantio_de_femea.iloc[:, columns_indices]
+
+    datetime_as_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    df_plantio_de_femea.to_excel(
+        f'plantio_de_femea_{datetime_as_str}.xlsx')
+
+    # Colheita
+    df_colheita = pd.DataFrame(data=data['Colheita'])
+
+    df_colheita['Data início colheita'] = ''
+
+    for line in range(len(df_colheita)):
+
+        mes = df_colheita.loc[line, 'Início: Mês da Colheita']
+        dia = df_colheita.loc[line, 'Início: Dia da Colheita']
+
+        if isinstance(mes, numpy.int64) and isinstance(dia, numpy.int64):
+            df_colheita.loc[line, 'Data início colheita'] = datetime(
+                2025, mes, dia).date()
+        else:
+            df_colheita.loc[line, 'Data início colheita'] = None
+
+    possible_columns_without_data = ['Área colhida 2',
+                                     'Transporte 1',
+                                     'Área Transporte 1',
+                                     'Transporte 2',
+                                     'Área Transporte 2']
+
+    for column_name in possible_columns_without_data:
+        if column_name not in df_colheita.columns:
+
+            df_colheita[column_name] = None
+
+    columns_indices = [df_colheita.columns.get_loc(
+        col) for col in columns_order['Colheita']]
+    df_colheita = df_colheita.iloc[:, columns_indices]
+
+    datetime_as_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    df_colheita.to_excel(
+        f'colheita_{datetime_as_str}.xlsx')
+
+    # Despendoamento e ROI
+    df_despendoamento = pd.DataFrame(data=data['Despendoamento'])
+
+    for line in range(len(df_despendoamento)):
+        breakpoint()
+        inicio_despendoamento_mes = df_despendoamento.loc[line, 'Início: Mês']
+        inicio_despendoamento_dia = df_despendoamento.loc[line, 'Início: Dia']
+
+        if isinstance(inicio_despendoamento_mes, numpy.int64) and isinstance(inicio_despendoamento_dia, numpy.int64):
+            df_despendoamento.loc[line, 'Data início despendoamento'] = datetime(
+                2025, inicio_despendoamento_mes, inicio_despendoamento_dia)
+        else:
+            df_despendoamento.loc[line, 'Data início despendoamento'] = None
+
+    columns_indices = [df_colheita.columns.get_loc(
+        col) for col in columns_order['Despendoamento']]
+    df_colheita = df_colheita.iloc[:, columns_indices]
+
+    datetime_as_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    df_colheita.to_excel(
+        f'despendoamento_{datetime_as_str}.xlsx')
+
+    return 'Spreadsheet has been created.'
+
+
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PDB continue (IO-capturing resumed) >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 
+FAILED                                                  [100%]
+
+============================================================== FAILURES =============================================================== 
+_________________________________________ test_create_spreadsheet_according_to_cropwise_form __________________________________________ 
+
+self = Index(['Campo', 'Híbrido', 'Grower', 'Production Core', 'Área declarada (Ha)',
+       'Data fim colheita', 'Área Trans...ita 1',
+       'Início: Dia da Colheita', 'Área colhida 1', 'Transporte 2',
+       'Colheita 2'],
+      dtype='object')
+key = 'Início: Mês'
+
+    def get_loc(self, key):
+        """
+        Get integer location, slice or boolean mask for requested label.
+
+        Parameters
+        ----------
+        key : label
+
+        Returns
+        -------
+        int if unique index, slice if monotonic index, else mask
+
+        Examples
+        --------
+        >>> unique_index = pd.Index(list('abc'))
+        >>> unique_index.get_loc('b')
+        1
+
+        >>> monotonic_index = pd.Index(list('abbc'))
+        >>> monotonic_index.get_loc('b')
+        slice(1, 3, None)
+
+        >>> non_monotonic_index = pd.Index(list('abcb'))
+        >>> non_monotonic_index.get_loc('b')
+        array([False,  True, False,  True])
+        """
+        casted_key = self._maybe_cast_indexer(key)
+        try:
+>           return self._engine.get_loc(casted_key)
+
+..\..\..\..\AppData\Local\pypoetry\Cache\virtualenvs\cropwise-mio-oIst5QWN-py3.11\Lib\site-packages\pandas\core\indexes\base.py:3805:   
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+index.pyx:167: in pandas._libs.index.IndexEngine.get_loc
+    ???
+index.pyx:196: in pandas._libs.index.IndexEngine.get_loc
+    ???
+pandas\\_libs\\hashtable_class_helper.pxi:7081: in pandas._libs.hashtable.PyObjectHashTable.get_item
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   KeyError: 'Início: Mês'
+
+pandas\\_libs\\hashtable_class_helper.pxi:7089: KeyError
+
+The above exception was the direct cause of the following exception:
+
+simulate_mio_return = (['', '', '', 'Fazenda Água Limpa (Agrop. Celeiro)', 'BRAK1908 - P05', 'Parent Seeds BR', ...], ['', '', '', 'São 
+Migu...05', 'Bahia', ...], ['', '', '', 'Fazenda Água Limpa (Agrop. Celeiro)', 'BRAK1908 - P05', 'Parent Seeds BR', ...], ...)
+
+    def test_create_spreadsheet_according_to_cropwise_form(simulate_mio_return):
+
+        # plantio_de_femea_form = distinguish_data_according_to_cropwise_forms(
+        #    data_from_mio=simulate_mio_return)
+        from app.core import query
+        from app.database import connect_mio_and_query_data
+        plantio_de_femea_form = distinguish_data_according_to_cropwise_forms(
+            connect_mio_and_query_data(query=query))
+
+>       create_spreadsheet_according_to_cropwise_form(data=plantio_de_femea_form)
+
+tests\test_domain.py:19:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app\domain.py:312: in create_spreadsheet_according_to_cropwise_form
+    inicio_despendoamento_mes = df_despendoamento.loc[line, 'Início: Mês']
+..\..\..\..\AppData\Local\pypoetry\Cache\virtualenvs\cropwise-mio-oIst5QWN-py3.11\Lib\site-packages\pandas\core\indexing.py:1183: in __getitem__
+    return self.obj._get_value(*key, takeable=self._takeable)
+..\..\..\..\AppData\Local\pypoetry\Cache\virtualenvs\cropwise-mio-oIst5QWN-py3.11\Lib\site-packages\pandas\core\frame.py:4214: in _get_value
+    series = self._get_item_cache(col)
+..\..\..\..\AppData\Local\pypoetry\Cache\virtualenvs\cropwise-mio-oIst5QWN-py3.11\Lib\site-packages\pandas\core\frame.py:4638: in _get_item_cache
+    loc = self.columns.get_loc(item)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Index(['Campo', 'Híbrido', 'Grower', 'Production Core', 'Área declarada (Ha)',
+       'Data fim colheita', 'Área Trans...ita 1',
+       'Início: Dia da Colheita', 'Área colhida 1', 'Transporte 2',
+       'Colheita 2'],
+      dtype='object')
+key = 'Início: Mês'
+
+    def get_loc(self, key):
+        """
+        Get integer location, slice or boolean mask for requested label.
+
+        Parameters
+        ----------
+        key : label
+
+        Returns
+        -------
+        int if unique index, slice if monotonic index, else mask
+
+        Examples
+        --------
+        >>> unique_index = pd.Index(list('abc'))
+        >>> unique_index.get_loc('b')
+        1
+
+        >>> monotonic_index = pd.Index(list('abbc'))
+        >>> monotonic_index.get_loc('b')
+        slice(1, 3, None)
+
+        >>> non_monotonic_index = pd.Index(list('abcb'))
+        >>> non_monotonic_index.get_loc('b')
+        array([False,  True, False,  True])
+        """
+        casted_key = self._maybe_cast_indexer(key)
+        try:
+            return self._engine.get_loc(casted_key)
+        except KeyError as err:
+            if isinstance(casted_key, slice) or (
+                isinstance(casted_key, abc.Iterable)
+                and any(isinstance(x, slice) for x in casted_key)
+            ):
+                raise InvalidIndexError(key)
+>           raise KeyError(key) from err
+E           KeyError: 'Início: Mês'
+
+..\..\..\..\AppData\Local\pypoetry\Cache\virtualenvs\cropwise-mio-oIst5QWN-py3.11\Lib\site-packages\pandas\core\indexes\base.py:3812: KeyError
+========================================================== warnings summary =========================================================== 
+tests/test_domain.py::test_create_spreadsheet_according_to_cropwise_form
+  C:\Users\s1203595\AppData\Local\pypoetry\Cache\virtualenvs\cropwise-mio-oIst5QWN-py3.11\Lib\site-packages\redshift_connector\core.py:654: DeprecationWarning: ssl.SSLContext() without protocol argument is deprecated.
+    ssl_context: SSLContext = SSLContext()
+
+tests/test_domain.py::test_create_spreadsheet_according_to_cropwise_form
+  C:\Users\s1203595\AppData\Local\pypoetry\Cache\virtualenvs\cropwise-mio-oIst5QWN-py3.11\Lib\site-packages\redshift_connector\core.py:654: DeprecationWarning: ssl.PROTOCOL_TLS is deprecated
+    ssl_context: SSLContext = SSLContext()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================================================= short test summary info ======================================================= 
+FAILED tests/test_domain.py::test_create_spreadsheet_according_to_cropwise_form - KeyError: 'Início: Mês'
+========================================= 1 failed, 1 passed, 2 warnings in 412.58s (0:06:52) =============
